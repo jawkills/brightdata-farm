@@ -1,0 +1,18 @@
+# Bright Data session cookies + harvested API keys + per-account state
+data/
+output/
+captures/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Secrets / env
+.env
+
+# OS / editor
+.DS_Store
+Thumbs.db

@@ -1,0 +1,5 @@
+curl_cffi>=0.6
+
+# Optional — Google Workspace auth only:
+# cloakbrowser
+# playwright

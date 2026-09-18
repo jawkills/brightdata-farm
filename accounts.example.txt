@@ -1,0 +1,5 @@
+# One account per line: email | password | totp_secret (secret optional)
+# Lines starting with # are ignored.
+#
+# you@example.com|yourpassword
+# other@example.com|theirpassword|BASE32TOTPSECRET
