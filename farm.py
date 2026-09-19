@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Bright Data account + promo-code farmer.
+"""Bright Data account + promo-code farmer (v2).
 
 Logs into Bright Data via GitHub OAuth (default, pure HTTP) or Google Workspace
-OAuth (headless browser), applies a promo code, and fetches the API key.
+OAuth (headless browser), applies a promo code, fetches the API key, escalates
+it to full admin, then collects balance/trial/zone-proxy credentials.
 
 Single entry point — no duplicate logic. Auth-specific code lives in
 `github_auth.py` and `google_auth.py`; shared billing flow in `common.py`.
@@ -21,9 +22,11 @@ accounts.txt line format (delimiter `|`):
   email|password|totp_secret      (GitHub 2FA)
 
 Output:
-  output/keys.txt        -> email|api_token  (append)
-  data/<email>.flow.json -> per-account result
+  output/keys.txt        -> email|api_token  (append; token is FULL ADMIN)
+  output/balance.txt     -> email|balance|credit|trial_left (append)
+  data/<email>.flow.json -> per-account result (balance + zones included)
   data/<email>.cookies.json
+  data/<email>.zones.json -> superproxy credentials per zone
 
 Config:
   BRD_PROMO_CODE env var overrides the promo code (default: wemakedevs).
@@ -54,6 +57,13 @@ def save_json(path: Path, obj: dict) -> None:
 def append_key(email: str, token: str) -> None:
     with (OUT / "keys.txt").open("a", encoding="utf-8") as f:
         f.write(f"{email}|{token}\n")
+
+
+def append_balance(email: str, balance: dict) -> None:
+    bal = balance.get("balance", "?")
+    credit = balance.get("credit", "?")
+    with (OUT / "balance.txt").open("a", encoding="utf-8") as f:
+        f.write(f"{email}|{bal}|{credit}\n")
 
 
 def auth_for(method: str, email: str, password: str, secret: str, headless: bool):
@@ -96,10 +106,15 @@ def run_one(method: str, parts: list[str], headless: bool) -> dict:
     row["ok"] = bool(http.get("api_token")) and http.get("promo_applied")
 
     save_json(DATA / f"{email}.flow.json", row)
+    if http.get("zones"):
+        save_json(DATA / f"{email}.zones.json", http["zones"])
 
     if row["ok"]:
         append_key(email, http["api_token"])
-        log(f"  OK {email} token={http['api_token'][:24]}...")
+        if http.get("balance"):
+            append_balance(email, http["balance"])
+        esc = " ESCALATED" if http.get("token_escalated") else ""
+        log(f"  OK {email} token={http['api_token'][:24]}...{esc}")
     else:
         log(
             f"  PARTIAL {email}: promo={http.get('promo_applied')} "
@@ -110,7 +125,7 @@ def run_one(method: str, parts: list[str], headless: bool) -> dict:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Bright Data account + promo-code farmer")
+    ap = argparse.ArgumentParser(description="Bright Data account + promo-code farmer v2")
     ap.add_argument("--method", choices=["github", "google"], default="github",
                     help="auth backend (default: github)")
     ap.add_argument("--email")
